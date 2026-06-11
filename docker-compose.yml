@@ -41,7 +41,8 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "${OUTLINE_PORT}:3000"
+      # Solo accesible desde el host (nginx). No exponer al exterior.
+      - "127.0.0.1:${OUTLINE_PORT}:3000"
     environment:
       # --- Core ---
       NODE_ENV: production
