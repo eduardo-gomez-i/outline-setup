@@ -1,0 +1,102 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: outline-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - outline
+
+  redis:
+    image: redis:7-alpine
+    container_name: outline-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - outline
+
+  outline:
+    image: outlinewiki/outline:latest
+    container_name: outline-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${OUTLINE_PORT}:3000"
+    environment:
+      # --- Core ---
+      NODE_ENV: production
+      SECRET_KEY: ${SECRET_KEY}
+      UTILS_SECRET: ${UTILS_SECRET}
+      URL: ${URL}
+      PORT: 3000
+      FORCE_HTTPS: ${FORCE_HTTPS}
+
+      # --- Database ---
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PGSSLMODE: disable
+
+      # --- Redis ---
+      REDIS_URL: redis://redis:6379
+
+      # --- Local file storage (sin MinIO/S3) ---
+      FILE_STORAGE: local
+      FILE_STORAGE_LOCAL_ROOT_DIR: /var/lib/outline/data
+      FILE_STORAGE_UPLOAD_MAX_SIZE: ${FILE_STORAGE_UPLOAD_MAX_SIZE}
+      FILE_STORAGE_IMPORT_MAX_SIZE: ${FILE_STORAGE_UPLOAD_MAX_SIZE}
+
+      # --- OIDC (proveedor generico) ---
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      OIDC_AUTH_URI: ${OIDC_AUTH_URI}
+      OIDC_TOKEN_URI: ${OIDC_TOKEN_URI}
+      OIDC_USERINFO_URI: ${OIDC_USERINFO_URI}
+      OIDC_LOGOUT_URI: ${OIDC_LOGOUT_URI}
+      OIDC_USERNAME_CLAIM: ${OIDC_USERNAME_CLAIM}
+      OIDC_DISPLAY_NAME: ${OIDC_DISPLAY_NAME}
+      OIDC_SCOPES: ${OIDC_SCOPES}
+
+      # --- Google Workspace (descomentar cuando se implemente) ---
+      # GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      # GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+
+      # --- Auth por email (magic link) para PROBAR sin OIDC ---
+      # Apunta a Mailpit (SMTP de pruebas). Quitar en produccion real.
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+      SMTP_SECURE: ${SMTP_SECURE}
+    volumes:
+      - outline-data:/var/lib/outline/data
+    networks:
+      - outline
+
+volumes:
+  postgres-data:
+  redis-data:
+  outline-data:
+
+networks:
+  outline:
+    driver: bridge
